@@ -1,0 +1,1533 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChessUp - 정밀 체스 기보 진단 및 성향 분석 플랫폼</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 구글 폰트: Inter 및 프리미엄 서체 -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <!-- Lucide 아이콘 라이브러리 -->
+  <!-- 기존 unpkg 주소를 지우고 이 안정적인 cdnjs 주소로 변경하세요 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.469.0/lucide.min.js"></script>
+  
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: #F8F9FA;
+    }
+    /* 애니메이션 효과 */
+    .fade-in {
+      animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes pulse-soft {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(0.98); }
+    }
+    .pulse-soft {
+      animation: pulse-soft 2s infinite ease-in-out;
+    }
+    /* 휠 스크롤바 디자인 정밀화 */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #F2F4F6;
+      border-radius: 6px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #E5E8EB;
+      border-radius: 6px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #CBD5E1;
+    }
+  </style>
+</head>
+<body class="text-[#191F28] min-h-screen flex flex-col antialiased">
+
+  <!-- 1. 헤더 (Header) -->
+  <header class="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-[#E5E8EB] px-4 md:px-8 py-3.5 flex items-center justify-between shadow-sm">
+    <div class="flex items-center gap-3 cursor-pointer" onclick="switchTab('main')">
+      <!-- logo.png 연동 영역 (에러 시 정밀 텍스트 폴백 작동) -->
+      <img id="logo-img" src="logo.png" alt="ChessUp" class="h-8 md:h-9 object-contain" onerror="handleLogoError()">
+      <span id="logo-fallback" class="hidden text-xl font-black tracking-tight text-[#191F28]">
+        Ch<span class="text-[#558B49]">e</span>ss<span class="inline-block translate-y-[1px]">U</span>p
+      </span>
+    </div>
+
+    <!-- 네비게이션 및 세션 컨트롤 -->
+    <div class="flex items-center gap-3 md:gap-5">
+      <nav class="hidden sm:flex items-center gap-6 text-sm font-semibold text-[#4E5968]">
+        <button onclick="switchTab('main')" class="hover:text-[#558B49] transition focus:outline-none">정밀 기보 분석기</button>
+        <button onclick="switchTab('encyclopedia')" class="hover:text-[#558B49] transition focus:outline-none">스타일 도감</button>
+        <button id="nav-history-btn" onclick="switchTab('history')" class="hidden hover:text-[#558B49] transition focus:outline-none flex items-center gap-1">
+          <i data-lucide="history" class="w-4 h-4"></i> 분석 기록
+        </button>
+      </nav>
+
+      <div class="h-4 w-px bg-[#E5E8EB] hidden sm:block"></div>
+
+      <!-- 로그인 전 상태 버튼 -->
+      <button id="btn-login-trigger" onclick="openLoginModal()" class="flex items-center gap-1.5 bg-[#558B49] hover:bg-[#437038] text-white px-4 py-2 rounded-full text-xs font-bold transition shadow-sm">
+        <i data-lucide="log-in" class="w-3.5 h-3.5"></i>
+        <span>구글 간편 로그인</span>
+      </button>
+
+      <!-- 로그인 성공 후 프로필 배지 (초기 숨김) -->
+      <div id="user-profile-badge" class="hidden flex items-center gap-2 bg-[#EAF5E8] hover:bg-[#DCEFD9] transition px-3.5 py-2 rounded-full cursor-pointer text-xs font-bold text-[#558B49]" onclick="openProfileModal()">
+        <img id="header-avatar" src="" alt="avatar" class="w-5 h-5 rounded-full border border-white hidden">
+        <i id="header-avatar-fallback" data-lucide="user" class="w-3.5 h-3.5"></i>
+        <span id="header-username">체스 전사</span>
+        <span id="header-user-mbti" class="hidden bg-[#558B49] text-white px-1.5 py-0.5 rounded text-[9px] font-black">ACOR</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- 모바일 하단 탭 내비게이션 바 -->
+  <div class="sm:hidden flex border-b border-[#E5E8EB] bg-white text-center">
+    <button onclick="switchTab('main')" id="m-tab-main" class="flex-1 py-3.5 text-sm font-bold border-b-2 border-[#558B49] text-[#558B49]">기보 분석</button>
+    <button onclick="switchTab('encyclopedia')" id="m-tab-ency" class="flex-1 py-3.5 text-sm font-bold text-[#4E5968] border-b-2 border-transparent">스타일 도감</button>
+    <button onclick="switchTab('history')" id="m-tab-history" class="hidden flex-1 py-3.5 text-sm font-bold text-[#4E5968] border-b-2 border-transparent flex items-center justify-center gap-1">분석 히스토리</button>
+  </div>
+
+  <!-- 2. 메인 본문 컨테이너 -->
+  <main class="flex-grow max-w-5xl w-full mx-auto px-4 md:px-6 py-6 md:py-10">
+    
+    <!-- [탭 1] 기보 정밀 진단 탭 -->
+    <div id="tab-main-view" class="fade-in space-y-8">
+      
+      <!-- [상태 1] 분석 기입 뷰 -->
+      <div id="main-view" class="space-y-8">
+        <section class="text-center mb-6">
+          <span class="inline-flex items-center gap-1.5 bg-[#EAF5E8] text-[#558B49] text-xs font-bold px-3 py-1.5 rounded-full mb-3 shadow-sm">
+            <i data-lucide="sparkles" class="w-3 h-3"></i> AI 정밀 기보 진단 & 플레이 스타일 복기 엔진
+          </span>
+          <h1 class="text-3xl md:text-5xl font-extrabold tracking-tight leading-tight mb-3 text-[#191F28]">
+            단순 수치 점수를 넘어,<br />
+            <span class="text-[#558B49]">나만의 고유한 체스 스타일</span>을 발굴합니다
+          </h1>
+          <p class="text-[#4E5968] text-xs md:text-sm max-w-lg mx-auto leading-relaxed">
+            대국 데이터(PGN)를 입력해 보세요. 인공지능이 복잡도 변화, 전술 참여도, 오프닝 정합성을 계측하여 시각적 분석 리포트와 고유 성향 코드를 연산합니다.
+          </p>
+        </section>
+
+        <!-- PGN 입력 카드 -->
+        <section class="bg-white rounded-3xl p-5 md:p-8 shadow-[0_4px_24px_rgba(0,0,0,0.02)] border border-[#E5E8EB]">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <div class="flex items-center gap-2">
+              <span class="p-2 bg-[#EAF5E8] rounded-xl text-[#558B49]">
+                <i data-lucide="database" class="w-5 h-5"></i>
+              </span>
+              <label for="pgn-input" class="text-base md:text-lg font-bold text-[#191F28]">체스 기보(PGN) 입력</label>
+            </div>
+            <!-- 샘플 데이터 공급기 -->
+            <div class="flex flex-wrap gap-1.5">
+              <button onclick="loadSample('aggro')" class="text-[11px] bg-[#F2F4F6] hover:bg-[#E5E8EB] text-[#4E5968] font-bold py-1.5 px-2.5 rounded-lg transition">
+                🔥 카스파로프 (공격/난전형)
+              </button>
+              <button onclick="loadSample('turtle')" class="text-[11px] bg-[#F2F4F6] hover:bg-[#E5E8EB] text-[#4E5968] font-bold py-1.5 px-2.5 rounded-lg transition">
+                🛡️ 카르포프 (정밀 수비형)
+              </button>
+            </div>
+          </div>
+
+          <textarea
+            id="pgn-input"
+            rows="8"
+            class="w-full p-4 bg-[#F9FAFB] border border-[#E5E8EB] rounded-2xl text-xs md:text-sm font-mono placeholder-[#B0B8C1] focus:outline-none focus:border-[#558B49] focus:ring-1 focus:ring-[#558B49] transition resize-none mb-4"
+            placeholder='[Event "Casual Match"]&#10;[Result "1-0"]&#10;1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. b4 Bxb4 5. c3 Ba5...'
+          ></textarea>
+
+          <!-- 알림 팝업 메시지 -->
+          <div id="toast" class="hidden mb-4 p-4 bg-[#FEE3E2] text-[#DF2121] rounded-2xl text-xs font-semibold flex items-center gap-2 transition">
+            <i data-lucide="alert-circle" class="w-4 h-4"></i>
+            <span id="toast-message">오류 발생</span>
+          </div>
+
+          <button
+            onclick="startAnalysis()"
+            class="w-full bg-[#558B49] hover:bg-[#437038] text-white font-bold py-4 rounded-2xl shadow-[0_4px_12px_rgba(85,139,73,0.15)] transition duration-200 text-center text-sm md:text-base flex items-center justify-center gap-2"
+          >
+            <i data-lucide="cpu" class="w-5 h-5"></i> 기보 데이터 정밀 정합 분석 시작
+          </button>
+        </section>
+
+        <!-- 분석 가이드 영역 -->
+        <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-8">
+          <div class="bg-white p-5 rounded-2xl border border-[#E5E8EB] hover:shadow-sm transition">
+            <div class="w-8 h-8 bg-red-50 text-red-500 rounded-lg flex items-center justify-center mb-3">
+              <i data-lucide="sword" class="w-4 h-4"></i>
+            </div>
+            <h4 class="font-bold text-sm text-[#191F28] mb-1">공격/방어 밸런스</h4>
+            <p class="text-[11px] text-[#6B7684] leading-relaxed">상대 킹사이드 위협 빈도와 캐슬링 전술 경향을 측정해 사냥꾼인지 수호자인지 진단합니다.</p>
+          </div>
+          <div class="bg-white p-5 rounded-2xl border border-[#E5E8EB] hover:shadow-sm transition">
+            <div class="w-8 h-8 bg-green-50 text-green-500 rounded-lg flex items-center justify-center mb-3">
+              <i data-lucide="calculator" class="w-4 h-4"></i>
+            </div>
+            <h4 class="font-bold text-sm text-[#191F28] mb-1">난전 계산 강도</h4>
+            <p class="text-[11px] text-[#6B7684] leading-relaxed">체킹과 캡처가 맞물리는 복잡한 앤드게임/미들게임 연쇄 속 전술 수읽기 비중을 추정합니다.</p>
+          </div>
+          <div class="bg-white p-5 rounded-2xl border border-[#E5E8EB] hover:shadow-sm transition">
+            <div class="w-8 h-8 bg-amber-50 text-amber-500 rounded-lg flex items-center justify-center mb-3">
+              <i data-lucide="layout" class="w-4 h-4"></i>
+            </div>
+            <h4 class="font-bold text-sm text-[#191F28] mb-1">폰 구조 공간성</h4>
+            <p class="text-[11px] text-[#6B7684] leading-relaxed">중앙 폰을 과감히 열어 사선을 개방하는지, 체인을 닫아 제어하는지 분석합니다.</p>
+          </div>
+          <div class="bg-white p-5 rounded-2xl border border-[#E5E8EB] hover:shadow-sm transition">
+            <div class="w-8 h-8 bg-blue-50 text-blue-500 rounded-lg flex items-center justify-center mb-3">
+              <i data-lucide="shield-alert" class="w-4 h-4"></i>
+            </div>
+            <h4 class="font-bold text-sm text-[#191F28] mb-1">트릭/안정 가치</h4>
+            <p class="text-[11px] text-[#6B7684] leading-relaxed">비대칭 전술 변수 유도로 상대방의 실수를 낚는지, 안전한 교환 최적화 수만 선택하는지 도출합니다.</p>
+          </div>
+        </section>
+      </div>
+
+      <!-- [상태 2] 정밀 연산 로딩 화면 -->
+      <div id="loading-view" class="hidden text-center py-16 fade-in space-y-6">
+        <div class="inline-block relative">
+          <div class="w-20 h-20 bg-[#EAF5E8] rounded-full flex items-center justify-center pulse-soft">
+            <i data-lucide="settings" class="w-10 h-10 text-[#558B49] animate-spin"></i>
+          </div>
+        </div>
+        <div>
+          <h2 class="text-xl md:text-2xl font-bold text-[#191F28]" id="loading-title">기보 데이터 분석기 파싱 중...</h2>
+          <p class="text-[#8B95A1] text-xs mt-1" id="loading-sub">전술 밀도 계수 산출 및 이동 그래프 오차율을 최소화하고 있습니다.</p>
+        </div>
+        
+        <!-- 프로그레스 진행바 -->
+        <div class="w-64 mx-auto bg-[#E5E8EB] h-2 rounded-full overflow-hidden">
+          <div id="loading-progress" class="bg-[#558B49] h-full w-0 transition-all duration-300"></div>
+        </div>
+      </div>
+
+      <!-- [상태 3] 정밀 대국 분석 결과 대시보드 -->
+      <div id="result-view" class="hidden fade-in space-y-6">
+        
+        <!-- 상단 요약 배너 및 매칭 성향 -->
+        <div class="bg-gradient-to-br from-[#1B3217] to-[#0A1708] text-white rounded-3xl p-6 md:p-8 shadow-xl relative overflow-hidden">
+          <div class="absolute -right-6 -bottom-6 opacity-5 pointer-events-none">
+            <i data-lucide="award" class="w-60 h-60 text-white"></i>
+          </div>
+
+          <div class="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+            <div>
+              <span class="inline-flex items-center gap-1 bg-[#2C4927] text-[#8CD882] text-xs font-bold px-3 py-1 rounded-full mb-3">
+                <i data-lucide="activity" class="w-3 h-3"></i> AI 대국 기보 연산 진단 완료
+              </span>
+              <h2 class="text-xl md:text-3xl font-extrabold mb-1" id="result-title">로딩 실패</h2>
+              <p class="text-xs text-slate-300 max-w-xl mt-1 leading-relaxed" id="result-desc">플레이 스타일 분석 정보가 들어오는 자리입니다.</p>
+              
+              <div class="flex items-center gap-6 text-xs text-[#E5E8EB] border-t border-white/10 mt-4 pt-4">
+                <div>
+                  <span class="block text-[10px] text-[#A0AEC0]">시그니처 오프닝 추천</span>
+                  <span class="font-bold text-[#8CD882] text-sm" id="result-opening">분석 대기 중</span>
+                </div>
+                <div class="w-px h-6 bg-white/20"></div>
+                <div>
+                  <span class="block text-[10px] text-[#A0AEC0]">동일 지형 대표 마스터</span>
+                  <span class="font-bold text-[#8CD882] text-sm" id="result-famous">대기 중</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 요약된 성향 코드 블록 -->
+            <div class="bg-white/10 border border-white/15 rounded-2xl p-4 text-center self-stretch md:self-auto flex flex-col justify-center items-center min-w-[130px]">
+              <span class="text-[10px] uppercase font-bold text-slate-300 tracking-wider">플레이스타일 계열</span>
+              <div class="text-3xl md:text-4xl font-black text-[#8CD882] my-1" id="result-code">None</div>
+              <button onclick="switchTab('encyclopedia')" class="text-[10px] font-bold text-slate-200 hover:text-white underline mt-1">도감에서 보기 ➔</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 정밀 통계 지표 대시보드 -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          <!-- 좌측: 전술적 수치 지표 (공학적 바 그래프) -->
+          <div class="bg-white rounded-3xl p-6 border border-[#E5E8EB] lg:col-span-2 space-y-6">
+            <h3 class="text-sm font-bold text-[#191F28] pb-3 border-b border-[#F2F4F6] flex items-center gap-2">
+              <i data-lucide="bar-chart-3" class="text-[#558B49]"></i> 정밀 대국 플레이 스타일 지표
+            </h3>
+
+            <div class="space-y-5">
+              <!-- 지표 1 -->
+              <div>
+                <div class="flex justify-between text-xs font-semibold mb-1.5">
+                  <span class="text-red-500 font-bold" id="axis1-left-label">A (공격)</span>
+                  <span class="text-[#6B7684]" id="axis1-right-label">D (방어)</span>
+                </div>
+                <div class="h-2 w-full bg-[#F2F4F6] rounded-full overflow-hidden flex">
+                  <div id="axis1-bar" class="bg-red-500 h-full transition-all duration-1000" style="width: 50%"></div>
+                </div>
+              </div>
+
+              <!-- 지표 2 -->
+              <div>
+                <div class="flex justify-between text-xs font-semibold mb-1.5">
+                  <span class="text-green-600 font-bold" id="axis2-left-label">C (철저한 수읽기)</span>
+                  <span class="text-[#6B7684]" id="axis2-right-label">I (형태적 직관)</span>
+                </div>
+                <div class="h-2 w-full bg-[#F2F4F6] rounded-full overflow-hidden flex">
+                  <div id="axis2-bar" class="bg-green-600 h-full transition-all duration-1000" style="width: 50%"></div>
+                </div>
+              </div>
+
+              <!-- 지표 3 -->
+              <div>
+                <div class="flex justify-between text-xs font-semibold mb-1.5">
+                  <span class="text-amber-500 font-bold" id="axis3-left-label">O (중앙 개방)</span>
+                  <span class="text-[#6B7684]" id="axis3-right-label">C (구조 폐쇄)</span>
+                </div>
+                <div class="h-2 w-full bg-[#F2F4F6] rounded-full overflow-hidden flex">
+                  <div id="axis3-bar" class="bg-amber-500 h-full transition-all duration-1000" style="width: 50%"></div>
+                </div>
+              </div>
+
+              <!-- 지표 4 -->
+              <div>
+                <div class="flex justify-between text-xs font-semibold mb-1.5">
+                  <span class="text-blue-500 font-bold" id="axis4-left-label">R (트릭 유발)</span>
+                  <span class="text-[#6B7684]" id="axis4-right-label">P (안전제일)</span>
+                </div>
+                <div class="h-2 w-full bg-[#F2F4F6] rounded-full overflow-hidden flex">
+                  <div id="axis4-bar" class="bg-blue-500 h-full transition-all duration-1000" style="width: 50%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 우측: 게임 페이즈별 영향력 / 진단 요약 리포트 -->
+          <div class="bg-white rounded-3xl p-6 border border-[#E5E8EB] space-y-4 flex flex-col justify-between">
+            <div>
+              <h3 class="text-sm font-bold text-[#191F28] pb-3 border-b border-[#F2F4F6] flex items-center gap-2">
+                <i data-lucide="compass" class="text-[#558B49]"></i> 게임 국면별 진단 평가
+              </h3>
+              
+              <!-- 진단 가상 그래프 데이터 -->
+              <div class="space-y-4 mt-4">
+                <div>
+                  <div class="flex items-center justify-between text-xs mb-1">
+                    <span class="text-[#4E5968] flex items-center gap-1.5"><span class="w-1.5 h-1.5 bg-[#558B49] rounded-full"></span> 오프닝 (초반 배치력)</span>
+                    <span class="font-extrabold text-[#191F28]" id="phase-opening">92%</span>
+                  </div>
+                  <div class="h-1.5 bg-[#F2F4F6] rounded-full overflow-hidden">
+                    <div id="phase-opening-bar" class="bg-[#558B49] h-full transition-all duration-1000" style="width: 92%"></div>
+                  </div>
+                </div>
+                <div>
+                  <div class="flex items-center justify-between text-xs mb-1">
+                    <span class="text-[#4E5968] flex items-center gap-1.5"><span class="w-1.5 h-1.5 bg-yellow-500 rounded-full"></span> 미들게임 (전투 전술 강도)</span>
+                    <span class="font-extrabold text-[#191F28]" id="phase-middle">65%</span>
+                  </div>
+                  <div class="h-1.5 bg-[#F2F4F6] rounded-full overflow-hidden">
+                    <div id="phase-middle-bar" class="bg-yellow-500 h-full transition-all duration-1000" style="width: 65%"></div>
+                  </div>
+                </div>
+                <div>
+                  <div class="flex items-center justify-between text-xs mb-1">
+                    <span class="text-[#4E5968] flex items-center gap-1.5"><span class="w-1.5 h-1.5 bg-blue-500 rounded-full"></span> 엔드게임 (종반전 정밀도)</span>
+                    <span class="font-extrabold text-[#191F28]" id="phase-end">78%</span>
+                  </div>
+                  <div class="h-1.5 bg-[#F2F4F6] rounded-full overflow-hidden">
+                    <div id="phase-end-bar" class="bg-blue-500 h-full transition-all duration-1000" style="width: 78%"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 전술적 키워드 칩 세트 -->
+            <div class="pt-4 border-t border-[#F2F4F6]">
+              <span class="block text-[10px] text-[#8B95A1] font-bold mb-2">기보 핵심 검출 패턴</span>
+              <div class="flex flex-wrap gap-1" id="detection-tags">
+                <span class="bg-[#F2F4F6] text-[#4E5968] text-[9px] font-bold px-2 py-1 rounded-md">#캐슬링_완비</span>
+                <span class="bg-[#F2F4F6] text-[#4E5968] text-[9px] font-bold px-2 py-1 rounded-md">#공간_밀착</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 강약점 분석 카드 리포트 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="bg-white p-5 rounded-2xl border border-[#E5E8EB] flex gap-3 shadow-sm">
+            <div class="p-2.5 bg-green-50 text-[#558B49] rounded-xl h-fit">
+              <i data-lucide="check-circle-2" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <h4 class="font-bold text-xs text-[#191F28] mb-1">대국 분석에서 포착된 강점</h4>
+              <p class="text-[11px] text-[#6B7684] leading-relaxed" id="strength-text">계산이 활발한 상황에서 확실한 전술 우위를 점거합니다.</p>
+            </div>
+          </div>
+
+          <div class="bg-white p-5 rounded-2xl border border-[#E5E8EB] flex gap-3 shadow-sm">
+            <div class="p-2.5 bg-red-50 text-red-500 rounded-xl h-fit">
+              <i data-lucide="x-circle" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <h4 class="font-bold text-xs text-[#191F28] mb-1">안정적 경기력을 위한 보완점</h4>
+              <p class="text-[11px] text-[#6B7684] leading-relaxed" id="weakness-text">리스크 부담이 과하면 초반 폰 구조 왜곡에 취약해집니다.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 액션 버튼 영역 -->
+        <div class="flex flex-col sm:flex-row gap-2 justify-center pt-2">
+          <button onclick="resetAnalysis()" class="bg-[#E5E8EB] hover:bg-[#D8DCE0] text-[#4E5968] font-bold py-3 px-6 rounded-xl transition text-xs flex items-center justify-center gap-1.5">
+            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> 다른 기보 분석
+          </button>
+          <button id="save-result-btn" onclick="saveToCloud()" class="bg-[#558B49] hover:bg-[#437038] text-white font-bold py-3 px-6 rounded-xl shadow-sm transition text-xs flex items-center justify-center gap-1.5">
+            <i data-lucide="cloud-lightning" class="w-3.5 h-3.5"></i> 분석 데이터 계정에 저장
+          </button>
+          <button onclick="copyShareLink()" class="bg-white hover:bg-[#F2F4F6] border border-[#CBD5E1] text-[#4E5968] font-bold py-3 px-6 rounded-xl shadow-sm transition text-xs flex items-center justify-center gap-1.5">
+            <i data-lucide="share" class="w-3.5 h-3.5"></i> 분석 결과 링크 공유
+          </button>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- [탭 2] 성향 유형 도감 탭 -->
+    <div id="tab-encyclopedia-view" class="hidden fade-in space-y-8">
+      <section class="text-center max-w-xl mx-auto mb-6">
+        <h2 class="text-2xl md:text-3xl font-black text-[#191F28] mb-2">체스 플레이스타일 유형 가이드</h2>
+        <p class="text-xs text-[#6B7684] leading-relaxed">
+          유저 기보 분석용 16가지 대표 플레이 지형 코드 리스트입니다. 유형을 선택하여 성향별 최적의 매칭 오프닝, 기물 기동 철학 및 상대 기보 방어 수식을 참고하세요.
+        </p>
+      </section>
+
+      <!-- 도감 필터 탭 -->
+      <div class="flex flex-wrap items-center justify-center gap-1.5 mb-6" id="mbti-filters">
+        <button onclick="filterProfiles('all')" class="ency-filter-btn px-4 py-1.5 rounded-full text-xs font-bold bg-[#558B49] text-white transition">전체보기</button>
+        <button onclick="filterProfiles('attack')" class="ency-filter-btn px-4 py-1.5 rounded-full text-xs font-bold bg-white text-[#4E5968] hover:bg-[#E5E8EB] transition border border-[#E5E8EB]">공격 지형형 (A*)</button>
+        <button onclick="filterProfiles('defense')" class="ency-filter-btn px-4 py-1.5 rounded-full text-xs font-bold bg-white text-[#4E5968] hover:bg-[#E5E8EB] transition border border-[#E5E8EB]">방어 요새형 (D*)</button>
+        <button onclick="filterProfiles('calculation')" class="ency-filter-btn px-4 py-1.5 rounded-full text-xs font-bold bg-white text-[#4E5968] hover:bg-[#E5E8EB] transition border border-[#E5E8EB]">수읽기 정밀파 (*C*)</button>
+        <button onclick="filterProfiles('intuition')" class="ency-filter-btn px-4 py-1.5 rounded-full text-xs font-bold bg-white text-[#4E5968] hover:bg-[#E5E8EB] transition border border-[#E5E8EB]">구조 감각파 (*I*)</button>
+      </div>
+
+      <!-- 그리드 카드 -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="encyclopedia-grid">
+        <!-- 동적으로 주입됩니다 -->
+      </div>
+    </div>
+
+    <!-- [탭 3] 지난 분석 기록 탭 -->
+    <div id="tab-history-view" class="hidden fade-in space-y-8">
+      <section class="text-center max-w-xl mx-auto mb-6">
+        <h2 class="text-2xl md:text-3xl font-black text-[#191F28] mb-2">기보 분석 클라우드 보관함</h2>
+        <p class="text-xs text-[#6B7684] leading-relaxed">
+          회원님의 소중한 기보 진단 기록이 Firestore에 안전하게 기록되어 있습니다. 필요할 때 언제든 대시보드로 다시 불러오세요.
+        </p>
+      </section>
+
+      <div class="max-w-2xl mx-auto bg-white rounded-3xl p-6 border border-[#E5E8EB] space-y-4 shadow-sm">
+        <h3 class="text-sm font-bold text-[#191F28] pb-3 border-b border-[#F2F4F6] flex items-center justify-between">
+          <span class="flex items-center gap-1.5"><i data-lucide="cloud" class="text-[#558B49] w-4 h-4"></i> 분석 히스토리 로그</span>
+          <span class="text-xs text-[#8B95A1]" id="history-count">총 0건</span>
+        </h3>
+        
+        <div id="history-list" class="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+          <!-- 비어있을 때의 안내 문구 -->
+          <div class="text-center py-10 text-xs text-[#8B95A1]">
+            <i data-lucide="folder-open" class="w-8 h-8 mx-auto mb-2 text-slate-300"></i>
+            아직 저장된 기보 분석 기록이 없습니다.
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- 3. 소셜 / Firebase 구글 실제 로그인 팝업 모달 -->
+  <div id="login-modal" class="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl relative fade-in border border-[#E5E8EB]">
+      <button onclick="closeLoginModal()" class="absolute right-4 top-4 text-[#8B95A1] hover:text-[#191F28] focus:outline-none">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+
+      <div class="text-center mb-6">
+        <!-- 로고 이미지 연동 -->
+        <img src="logo.png" alt="ChessUp" class="h-9 mx-auto object-contain mb-3" onerror="this.style.display='none'">
+        <h3 class="text-lg font-bold text-[#191F28]">ChessUp 통합 로그인</h3>
+        <p class="text-xs text-[#8B95A1] mt-1">대국 분석 리포트를 영구 저장하고 맞춤형 지형 변환 기록을 수시로 확인해 보세요.</p>
+      </div>
+
+      <div class="space-y-2.5 mb-4">
+        <!-- 구글 실제 로그인 버튼 -->
+        <button id="auth-google-btn" class="w-full flex items-center justify-center gap-2 border border-[#E5E8EB] hover:bg-[#F9FAFB] text-[#4E5968] font-bold py-3 px-4 rounded-xl text-xs transition shadow-sm">
+          <svg class="w-4 h-4" viewBox="0 0 24 24">
+            <path fill="#EA4335" d="M12.24 10.285V14.4h6.887c-.275 1.565-1.88 4.604-6.887 4.604-4.33 0-7.859-3.578-7.859-8s3.53-8 7.859-8c2.46 0 4.105 1.025 5.047 1.926l3.244-3.123C18.445 1.838 15.623.8 12.24.8c-6.19 0-11.2 5.01-11.2 11.2s5.01 11.2 11.2 11.2c6.46 0 10.76-4.54 10.76-10.95 0-.74-.08-1.3-.18-1.965H12.24z"/>
+          </svg>
+          Google 계정으로 간편 가입
+        </button>
+
+        <!-- 익명 임시 로그인 지원 -->
+        <button id="auth-anonymous-btn" class="w-full bg-[#F2F4F6] hover:bg-[#E5E8EB] text-[#4E5968] font-bold py-3 px-4 rounded-xl text-xs transition">
+          임시 게스트 로그인
+        </button>
+      </div>
+
+      <p class="text-[10px] text-center text-[#8B95A1] leading-relaxed">로그인 시 ChessUp의 이용약관 및 개인정보처리방침에 동의한 것으로 간주됩니다.</p>
+    </div>
+  </div>
+
+  <!-- 4. 로그인 회원 정보 & 설정 모달 -->
+  <div id="profile-modal" class="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl relative fade-in border border-[#E5E8EB]">
+      <button onclick="closeProfileModal()" class="absolute right-4 top-4 text-[#8B95A1] hover:text-[#191F28] focus:outline-none">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+
+      <div class="text-center mb-5">
+        <div class="relative inline-block mb-3">
+          <img id="profile-avatar" src="" alt="Google Profile" class="w-16 h-16 rounded-full mx-auto border-2 border-[#558B49] hidden">
+          <div id="profile-avatar-fallback" class="w-16 h-16 bg-[#EAF5E8] rounded-full mx-auto flex items-center justify-center">
+            <i data-lucide="user" class="w-8 h-8 text-[#558B49]"></i>
+          </div>
+        </div>
+        <h3 class="text-lg font-bold text-[#191F28]" id="profile-email-text">이메일 로딩 중...</h3>
+        <p class="text-[10px] text-[#8B95A1] mt-0.5" id="profile-uid-text">UID: 로딩 중...</p>
+      </div>
+
+      <div class="space-y-4 mb-5">
+        <!-- 닉네임 교환 패널 -->
+        <div>
+          <label class="block text-[11px] font-bold text-[#4E5968] mb-1">사용자 지정 닉네임</label>
+          <div class="flex gap-1.5">
+            <input type="text" id="username-input" class="flex-grow bg-[#F9FAFB] border border-[#E5E8EB] rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:border-[#558B49]" placeholder="새 닉네임 입력">
+            <button id="btn-save-nickname" class="bg-[#558B49] text-white text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-[#437038] transition">변경</button>
+          </div>
+        </div>
+
+        <!-- 성향 기록 연동 데이터 -->
+        <div class="bg-[#F9FAFB] p-4 rounded-2xl border border-[#E5E8EB]">
+          <span class="block text-[10px] font-bold text-[#8B95A1] mb-2">마지막 정밀 진단 유형</span>
+          <div class="flex items-center gap-3">
+            <div id="profile-mbti-box" class="bg-[#558B49] text-white font-black text-xl tracking-wider px-3 py-1.5 rounded-lg">
+              대기
+            </div>
+            <div>
+              <h4 id="profile-mbti-title" class="font-bold text-xs text-[#191F28]">대기 중인 분석 레포트</h4>
+              <p id="profile-mbti-desc" class="text-[10px] text-[#6B7684] mt-0.5">기보를 입력하여 분석을 완료해 주세요.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex gap-2">
+        <button id="btn-logout" class="flex-1 bg-red-50 hover:bg-red-100 text-red-500 font-bold py-3 rounded-xl text-center text-xs transition">
+          로그아웃
+        </button>
+        <button onclick="closeProfileModal()" class="flex-1 bg-[#F2F4F6] hover:bg-[#E5E8EB] font-bold py-3 rounded-xl text-center text-xs text-[#4E5968] transition">
+          닫기
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. 성향 유형 상세 도감 모달 팝업 -->
+  <div id="detail-modal" class="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-lg w-full max-h-[85vh] overflow-y-auto p-6 shadow-2xl relative fade-in border border-[#E5E8EB]">
+      <button onclick="closeDetailModal()" class="absolute right-4 top-4 text-[#8B95A1] hover:text-[#191F28] focus:outline-none">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+
+      <!-- 상세 헤더 -->
+      <div class="text-center pb-5 border-b border-[#E5E8EB]">
+        <div id="detail-badge" class="inline-block bg-[#EAF5E8] text-[#558B49] text-xl font-black tracking-widest px-4 py-1.5 rounded-xl mb-2">
+          ACOR
+        </div>
+        <h3 id="detail-title" class="text-xl font-bold text-[#191F28]">전장의 기동 광전사</h3>
+        <p id="detail-sub" class="text-[11px] text-[#8B95A1] mt-0.5">대표 위인: 미하일 탈 (Mikhail Tal)</p>
+      </div>
+
+      <!-- 상세 본문 정보 -->
+      <div class="py-5 space-y-5 text-xs">
+        <div>
+          <span class="inline-flex items-center gap-1.5 text-[10px] font-bold text-[#558B49] bg-[#EAF5E8] px-2.5 py-1 rounded-full mb-1.5">
+            <i data-lucide="info" class="w-3 h-3"></i> 전술 철학 진단서
+          </span>
+          <p id="detail-desc" class="text-[#4E5968] leading-relaxed">상세 설명</p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="bg-[#F9FAFB] p-4 rounded-xl border border-[#E5E8EB]">
+            <h4 class="font-bold text-[#191F28] mb-1 flex items-center gap-1">
+              <i data-lucide="check-square" class="w-3.5 h-3.5 text-[#558B49]"></i> 전술적 강점
+            </h4>
+            <p id="detail-strength" class="text-[#6B7684] leading-relaxed text-[11px]">강점</p>
+          </div>
+          <div class="bg-[#FFF0F0] p-4 rounded-xl border border-[#FFE0E0]">
+            <h4 class="font-bold text-red-500 mb-1 flex items-center gap-1">
+              <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-red-500"></i> 취약 구도 점검
+            </h4>
+            <p id="detail-weakness" class="text-[#6B7684] leading-relaxed text-[11px]">약점</p>
+          </div>
+        </div>
+
+        <div class="border-t border-[#E5E8EB] pt-3.5 flex justify-between items-center">
+          <div>
+            <span class="block text-[10px] text-[#8B95A1]">추천 연계 오프닝</span>
+            <span id="detail-opening" class="font-bold text-[#558B49]">시실리안</span>
+          </div>
+          <div class="text-right">
+            <span class="block text-[10px] text-[#8B95A1]">핵심 전략 기물</span>
+            <span id="detail-piece" class="font-bold text-[#558B49]">비숍</span>
+          </div>
+        </div>
+
+        <!-- 궁합 -->
+        <div class="bg-[#F8F9FA] p-4 rounded-2xl border border-[#E5E8EB] space-y-2">
+          <h4 class="font-bold text-[#4E5968] text-center text-[11px]">🤝 전술적 라이벌 매칭 가이드</h4>
+          <div class="grid grid-cols-2 gap-2 text-center">
+            <div class="bg-white p-2.5 rounded-xl border border-[#E5E8EB]">
+              <span class="block text-[9px] text-green-500 font-bold">호적수 (시너지 최고의 파트너)</span>
+              <span id="detail-match-good" class="font-black text-[#191F28]">DICP</span>
+            </div>
+            <div class="bg-white p-2.5 rounded-xl border border-[#E5E8EB]">
+              <span class="block text-[9px] text-red-500 font-bold">까다로운 상대 (경계 대상)</span>
+              <span id="detail-match-bad" class="font-black text-[#191F28]">ACOP</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button onclick="closeDetailModal()" class="w-full bg-[#558B49] text-white font-bold py-3.5 rounded-xl text-center text-xs hover:bg-[#437038] transition">
+        창 닫기
+      </button>
+    </div>
+  </div>
+
+  <!-- 푸터 -->
+  <footer class="bg-white border-t border-[#E5E8EB] py-6 text-center text-[10px] text-[#8B95A1] mt-8">
+    <div class="max-w-5xl mx-auto px-6 flex flex-col sm:flex-row justify-between items-center gap-3">
+      <div class="flex items-center gap-1.5">
+        <span class="font-bold text-[#558B49]">ChessUp Engine</span>
+        <span>•</span>
+        <p>© 2026 ChessUp. All rights reserved.</p>
+      </div>
+      <div class="flex gap-4">
+        <a href="#" class="hover:underline">이용약관</a>
+        <a href="#" class="hover:underline">개인정보처리방침</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Firebase 최신 정식 버전 모듈 임포트 및 유연한 Fallback(가상 백업) 시스템 탑재 -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, addDoc, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // 글로벌 식별자 
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-chessup';
+    
+    // ==========================================
+    // VS Code 개발 시, 아래 객체에 실제 Firebase 설정을 입력하세요.
+    // ==========================================
+    const firebaseConfig = {
+        apiKey: "AIzaSyC3lHoZaizUE_oyJ4jW3bGdt6nlq4kp3sI",
+        authDomain: "chessup-cfe07.firebaseapp.com",
+        projectId: "chessup-cfe07",
+        storageBucket: "chessup-cfe07.firebasestorage.app",
+        messagingSenderId: "285471966585",
+        appId: "1:285471966585:web:d6152b4a45967db77b5ba8",
+        measurementId: "G-V49N2KCH7Q"
+    };
+
+    let app, db, auth, googleProvider;
+    let isFirebaseActive = false;
+
+    // 만약 Firebase 설정이 완전히 비어 있으면, 로컬 가상 Mock 시스템으로 작동하여 VS Code 빌드 시 에러를 방지합니다.
+    if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "") {
+      try {
+        app = initializeApp(firebaseConfig);
+        db = getFirestore(app);
+        auth = getAuth(app);
+        googleProvider = new GoogleAuthProvider();
+        isFirebaseActive = true;
+      } catch (err) {
+        console.warn("실제 Firebase 연결에 실패했습니다. 로컬 Mock 모드로 실행합니다:", err);
+      }
+    }
+
+    // 전역 변수 노출
+    window.appId = appId;
+    window.db = db;
+    window.auth = auth;
+    window.isFirebaseActive = isFirebaseActive;
+
+    // Auth 상태 변화 리스너 등록
+    if (isFirebaseActive) {
+      onAuthStateChanged(auth, async (user) => {
+        if (user) {
+          window.currentUser = user;
+          document.getElementById('profile-uid-text').innerText = `UID: ${user.uid}`;
+          document.getElementById('profile-email-text').innerText = user.email || '익명 게스트 계정';
+          
+          // UI 로그인 상태로 변경
+          document.getElementById('btn-login-trigger').classList.add('hidden');
+          document.getElementById('user-profile-badge').classList.remove('hidden');
+          document.getElementById('nav-history-btn').classList.remove('hidden');
+          document.getElementById('m-tab-history').classList.remove('hidden');
+
+          // 프로필 아바타 매핑
+          if (user.photoURL) {
+            document.getElementById('header-avatar').src = user.photoURL;
+            document.getElementById('header-avatar').classList.remove('hidden');
+            document.getElementById('header-avatar-fallback').classList.add('hidden');
+            document.getElementById('profile-avatar').src = user.photoURL;
+            document.getElementById('profile-avatar').classList.remove('hidden');
+            document.getElementById('profile-avatar-fallback').classList.add('hidden');
+          } else {
+            document.getElementById('header-avatar').classList.add('hidden');
+            document.getElementById('header-avatar-fallback').classList.remove('hidden');
+            document.getElementById('profile-avatar').classList.add('hidden');
+            document.getElementById('profile-avatar-fallback').classList.remove('hidden');
+          }
+
+          await loadUserProfile(user.uid);
+          await loadUserHistory(user.uid);
+        } else {
+          window.currentUser = null;
+          document.getElementById('btn-login-trigger').classList.remove('hidden');
+          document.getElementById('user-profile-badge').classList.add('hidden');
+          document.getElementById('nav-history-btn').classList.add('hidden');
+          document.getElementById('m-tab-history').classList.add('hidden');
+        }
+      });
+    } else {
+      // 로컬 스토리지 연동 가상 세션 구동 (Firebase 미설정 시 백업 실행)
+      console.log("Firebase 비가동 상태: Local-Mock 환경에서 데이터를 동기화합니다.");
+      const mockSession = localStorage.getItem('chessup_mock_user');
+      if (mockSession) {
+        const user = JSON.parse(mockSession);
+        window.currentUser = user;
+        setupMockUserUI(user);
+        loadMockHistory(user.uid);
+      }
+    }
+
+    // Mock 세션 UI 동기화
+    function setupMockUserUI(user) {
+      document.getElementById('profile-uid-text').innerText = `LOCAL-UID: ${user.uid}`;
+      document.getElementById('profile-email-text').innerText = user.email || '로컬 임시 게스트';
+      document.getElementById('btn-login-trigger').classList.add('hidden');
+      document.getElementById('user-profile-badge').classList.remove('hidden');
+      document.getElementById('header-avatar').classList.add('hidden');
+      document.getElementById('header-avatar-fallback').classList.remove('hidden');
+      document.getElementById('profile-avatar').classList.add('hidden');
+      document.getElementById('profile-avatar-fallback').classList.remove('hidden');
+      document.getElementById('nav-history-btn').classList.remove('hidden');
+      document.getElementById('m-tab-history').classList.remove('hidden');
+      
+      document.getElementById('header-username').innerText = user.nickname || '체스 전사';
+      document.getElementById('username-input').value = user.nickname || '';
+      if (user.mbti) {
+        document.getElementById('header-user-mbti').innerText = user.mbti;
+        document.getElementById('header-user-mbti').classList.remove('hidden');
+        document.getElementById('profile-mbti-box').innerText = user.mbti;
+        const profile = mbtiProfiles[user.mbti];
+        if (profile) {
+          document.getElementById('profile-mbti-title').innerText = profile.title;
+          document.getElementById('profile-mbti-desc').innerText = profile.desc;
+        }
+      }
+    }
+
+    // 실제 & 모의 구글 로그인 핸들러
+    document.getElementById('auth-google-btn').addEventListener('click', async () => {
+      if (!isFirebaseActive) {
+        const mockUser = {
+          uid: 'google-mock-' + Math.floor(Math.random() * 100000),
+          email: 'chessup.challenger@gmail.com',
+          photoURL: '',
+          nickname: '구글도전자_' + Math.floor(Math.random() * 900 + 100),
+          mbti: 'ACOR'
+        };
+        window.currentUser = mockUser;
+        localStorage.setItem('chessup_mock_user', JSON.stringify(mockUser));
+        setupMockUserUI(mockUser);
+        loadMockHistory(mockUser.uid);
+        closeLoginModal();
+        showToast("Google 모의 로그인이 완료되었습니다! 🌟", false);
+        return;
+      }
+      try {
+        await signInWithPopup(auth, googleProvider);
+        closeLoginModal();
+        showToast("Google 실제 인증 연동 성공! 계정이 결합되었습니다. 🌟", false);
+      } catch (err) {
+        console.error("구글 로그인 실패:", err);
+        showToast("구글 팝업 인증에 실패했습니다. 차단 해제를 확인해 주세요.");
+      }
+    });
+
+    // 임시 게스트 로그인 핸들러
+    document.getElementById('auth-anonymous-btn').addEventListener('click', async () => {
+      if (!isFirebaseActive) {
+        const mockUser = {
+          uid: 'anon-mock-' + Math.floor(Math.random() * 100000),
+          email: 'guest@chessup.local',
+          photoURL: '',
+          nickname: '임시전사_' + Math.floor(Math.random() * 900 + 100),
+          mbti: ''
+        };
+        window.currentUser = mockUser;
+        localStorage.setItem('chessup_mock_user', JSON.stringify(mockUser));
+        setupMockUserUI(mockUser);
+        loadMockHistory(mockUser.uid);
+        closeLoginModal();
+        showToast("임시 로컬 게스트 세션으로 진입했습니다.", false);
+        return;
+      }
+      try {
+        await signInAnonymously(auth);
+        closeLoginModal();
+        showToast("임시 익명 세션이 시작되었습니다.", false);
+      } catch (err) {
+        console.error(err);
+      }
+    });
+
+    // 로그아웃 버튼 바인딩
+    document.getElementById('btn-logout').addEventListener('click', async () => {
+      if (!isFirebaseActive) {
+        window.currentUser = null;
+        localStorage.removeItem('chessup_mock_user');
+        document.getElementById('btn-login-trigger').classList.remove('hidden');
+        document.getElementById('user-profile-badge').classList.add('hidden');
+        document.getElementById('nav-history-btn').classList.add('hidden');
+        document.getElementById('m-tab-history').classList.add('hidden');
+        closeProfileModal();
+        showToast("로그아웃 완료되었습니다.", false);
+        return;
+      }
+      try {
+        await signOut(auth);
+        closeProfileModal();
+        showToast("안전하게 로그아웃되었습니다.", false);
+      } catch (err) {
+        console.error(err);
+      }
+    });
+
+    // 유저 프로필 조회 및 동기화
+    async function loadUserProfile(uid) {
+      if (!isFirebaseActive || !window.db) return;
+      try {
+        const docRef = doc(db, 'artifacts', appId, 'users', uid, 'profile', 'info');
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          window.userProfileData = data;
+          document.getElementById('header-username').innerText = data.nickname || '체스 전사';
+          document.getElementById('username-input').value = data.nickname || '';
+          
+          if (data.mbti) {
+            document.getElementById('header-user-mbti').innerText = data.mbti;
+            document.getElementById('header-user-mbti').classList.remove('hidden');
+            document.getElementById('profile-mbti-box').innerText = data.mbti;
+            
+            const profile = mbtiProfiles[data.mbti];
+            if (profile) {
+              document.getElementById('profile-mbti-title').innerText = profile.title;
+              document.getElementById('profile-mbti-desc').innerText = profile.desc;
+            }
+          }
+        } else {
+          // 최초 신규 가입 시 기본 템플릿 정보 삽입
+          const fallbackNick = window.currentUser.displayName || '도전자_' + Math.floor(Math.random() * 9000 + 1000);
+          const initialData = {
+            nickname: fallbackNick,
+            mbti: '',
+            createdAt: new Date().toISOString()
+          };
+          await setDoc(docRef, initialData);
+          window.userProfileData = initialData;
+          document.getElementById('header-username').innerText = fallbackNick;
+          document.getElementById('username-input').value = fallbackNick;
+        }
+      } catch (err) {
+        console.warn("프로필 조회 실패:", err);
+      }
+    }
+
+    // 닉네임 변경 반영
+    document.getElementById('btn-save-nickname').addEventListener('click', async () => {
+      const inputVal = document.getElementById('username-input').value.trim();
+      if (!inputVal) {
+        showToast("유효한 별칭을 입력해 주세요.");
+        return;
+      }
+      if (!window.currentUser) return;
+      
+      if (!isFirebaseActive) {
+        window.currentUser.nickname = inputVal;
+        localStorage.setItem('chessup_mock_user', JSON.stringify(window.currentUser));
+        setupMockUserUI(window.currentUser);
+        showToast("닉네임 변경 완료! (로컬 적용) 🌟", false);
+        return;
+      }
+
+      try {
+        const docRef = doc(db, 'artifacts', appId, 'users', window.currentUser.uid, 'profile', 'info');
+        await updateDoc(docRef, { nickname: inputVal });
+        document.getElementById('header-username').innerText = inputVal;
+        showToast("클라우드 닉네임이 정상 반영되었습니다! 🌟", false);
+      } catch (err) {
+        console.error("수정 오류:", err);
+        showToast("수정에 실패했습니다.");
+      }
+    });
+
+    // 클라우드 분석 저장 연동
+    window.saveToCloud = async function() {
+      const code = document.getElementById('result-code').innerText;
+      if (!code || code === 'None' || !window.currentUser) {
+        showToast("저장할 기보 분석 내역이 없거나 로그인이 되지 않았습니다.");
+        return;
+      }
+
+      const pgnData = document.getElementById('pgn-input').value.trim();
+      const title = document.getElementById('result-title').innerText;
+      
+      const payload = {
+        mbti: code,
+        title: title,
+        pgn: pgnData,
+        famous: document.getElementById('result-famous').innerText,
+        opening: document.getElementById('result-opening').innerText,
+        timestamp: new Date().toISOString()
+      };
+
+      if (!isFirebaseActive) {
+        // 로컬 목 저장
+        const historyKey = `chessup_history_${window.currentUser.uid}`;
+        let localHist = JSON.parse(localStorage.getItem(historyKey) || '[]');
+        localHist.unshift(payload);
+        localStorage.setItem(historyKey, JSON.stringify(localHist));
+        
+        window.currentUser.mbti = code;
+        localStorage.setItem('chessup_mock_user', JSON.stringify(window.currentUser));
+        setupMockUserUI(window.currentUser);
+        loadMockHistory(window.currentUser.uid);
+        showToast("기보 진단 결과가 브라우저 세션에 저장되었습니다! 💾", false);
+        return;
+      }
+
+      try {
+        // 1. 프로필 최종 성향 업데이트
+        const docRef = doc(db, 'artifacts', appId, 'users', window.currentUser.uid, 'profile', 'info');
+        await updateDoc(docRef, { mbti: code });
+        
+        // 2. 히스토리 하부 컬렉션에 추가
+        const histCol = collection(db, 'artifacts', appId, 'users', window.currentUser.uid, 'analyses');
+        await addDoc(histCol, payload);
+
+        await loadUserProfile(window.currentUser.uid);
+        await loadUserHistory(window.currentUser.uid);
+        
+        showToast("대국 분석 리포트가 Firestore에 기록되었습니다! 💾", false);
+      } catch (err) {
+        console.error("저장 오류:", err);
+        showToast("클라우드 연결 중 전송 거절");
+      }
+    };
+
+    // Firestore 분석 히스토리 연동 조회
+    async function loadUserHistory(uid) {
+      if (!isFirebaseActive) return;
+      const listDiv = document.getElementById('history-list');
+      try {
+        const histCol = collection(db, 'artifacts', appId, 'users', uid, 'analyses');
+        const q = query(histCol, orderBy('timestamp', 'desc'));
+        const querySnap = await getDocs(q);
+        
+        document.getElementById('history-count').innerText = `총 ${querySnap.size}건`;
+
+        if (querySnap.empty) {
+          listDiv.innerHTML = `
+            <div class="text-center py-10 text-xs text-[#8B95A1]">
+              <i data-lucide="folder-open" class="w-8 h-8 mx-auto mb-2 text-slate-300"></i>
+              저장된 기보 분석 내역이 존재하지 않습니다.
+            </div>`;
+          lucide.createIcons();
+          return;
+        }
+
+        listDiv.innerHTML = '';
+        querySnap.forEach((docSnap) => {
+          const item = docSnap.data();
+          const dateStr = new Date(item.timestamp).toLocaleString('ko-KR');
+          const element = document.createElement('div');
+          element.className = "bg-[#F9FAFB] p-4 rounded-xl border border-[#E5E8EB] flex justify-between items-center hover:border-[#558B49] transition";
+          element.innerHTML = `
+            <div>
+              <div class="flex items-center gap-1.5 mb-1">
+                <span class="bg-[#558B49] text-white text-[9px] font-black px-1.5 py-0.5 rounded">${item.mbti}</span>
+                <h4 class="font-bold text-xs text-[#191F28]">${item.title}</h4>
+              </div>
+              <p class="text-[10px] text-[#6B7684]">진단 오프닝: ${item.opening} • ${dateStr}</p>
+            </div>
+            <button class="bg-[#EAF5E8] hover:bg-[#DCEFD9] text-[#558B49] text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition flex items-center gap-1">
+              <i data-lucide="arrow-up-right" class="w-3 h-3"></i> 로드
+            </button>`;
+          
+          // 로드 기능 부여
+          element.querySelector('button').onclick = () => {
+            document.getElementById('pgn-input').value = item.pgn || '';
+            showAnalysisResult(item.pgn || '');
+            switchTab('main');
+            showToast("보관함에서 이전 기보 데이터를 대시보드로 호출했습니다! ⚡", false);
+          };
+
+          listDiv.appendChild(element);
+        });
+        lucide.createIcons();
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // 가상 로컬 스토리지 데이터 백업용 복사 처리
+    function loadMockHistory(uid) {
+      const listDiv = document.getElementById('history-list');
+      const historyKey = `chessup_history_${uid}`;
+      const items = JSON.parse(localStorage.getItem(historyKey) || '[]');
+      
+      document.getElementById('history-count').innerText = `로컬 보관 ${items.length}건`;
+
+      if (items.length === 0) {
+        listDiv.innerHTML = `
+          <div class="text-center py-10 text-xs text-[#8B95A1]">
+            <i data-lucide="folder-open" class="w-8 h-8 mx-auto mb-2 text-slate-300"></i>
+            로컬 저장된 분석 내역이 없습니다.
+          </div>`;
+        lucide.createIcons();
+        return;
+      }
+
+      listDiv.innerHTML = '';
+      items.forEach((item, index) => {
+        const dateStr = new Date(item.timestamp).toLocaleString('ko-KR');
+        const element = document.createElement('div');
+        element.className = "bg-[#F9FAFB] p-4 rounded-xl border border-[#E5E8EB] flex justify-between items-center hover:border-[#558B49] transition";
+        element.innerHTML = `
+          <div>
+            <div class="flex items-center gap-1.5 mb-1">
+              <span class="bg-[#558B49] text-white text-[9px] font-black px-1.5 py-0.5 rounded">${item.mbti}</span>
+              <h4 class="font-bold text-xs text-[#191F28]">${item.title}</h4>
+            </div>
+            <p class="text-[10px] text-[#6B7684]">진단 오프닝: ${item.opening} • ${dateStr}</p>
+          </div>
+          <button class="bg-[#EAF5E8] hover:bg-[#DCEFD9] text-[#558B49] text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition flex items-center gap-1">
+            <i data-lucide="arrow-up-right" class="w-3 h-3"></i> 로드
+          </button>`;
+        
+        element.querySelector('button').onclick = () => {
+          document.getElementById('pgn-input').value = item.pgn || '';
+          showAnalysisResult(item.pgn || '');
+          switchTab('main');
+          showToast("보관함에서 이전 모의 기보 데이터를 성공적으로 로드했습니다! ⚡", false);
+        };
+
+        listDiv.appendChild(element);
+      });
+      lucide.createIcons();
+    }
+  </script>
+
+  <script>
+    // 16가지 체스 전술 스타일 메타 정의
+    const mbtiProfiles = {
+      "ACOR": {
+        title: "전장의 기동 광전사",
+        desc: "기동이 활발하게 일어나는 복잡한 오픈 전술 구도를 지배합니다. 대담한 전차형 희생 수순을 무기로 상대의 구조적 약점을 정밀 격파하는 난전형 수읽기 공격수입니다.",
+        famous: "미하일 탈 (Mikhail Tal)",
+        opening: "킹스 갬빗 (King's Gambit)",
+        piece: "비숍 & 나이트 난전 연동",
+        strength: "기물이 가벼이 해체되는 급박한 사선 전투 상황에서 위력적인 계산 우위를 통해 외길 체크메이트를 강제합니다.",
+        weakness: "수비 진형을 완전히 내버려 둔 채 극장식 공격만을 추진하여 치명적인 역공 공간을 주기도 합니다.",
+        mGood: "DICP",
+        mBad: "ACOP",
+        category: "attack"
+      },
+      "DICP": {
+        title: "요새의 철벽 지휘관",
+        desc: "진형의 완전 무결함을 선호하여 폰 체인을 가급적 무겁게 잠급니다. 상대 기물의 무리한 돌출 침투를 고사시켜 천천히 고사시키는 방어 요새 사령관입니다.",
+        famous: "티그란 페트로시안 (Tigran Petrosian)",
+        opening: "카로칸 디펜스 (Caro-Kann)",
+        piece: "킹사이드 요충지 지지 폰",
+        strength: "미세한 약점도 흘리지 않는 완벽한 요새화로 적의 인내심을 마모시켜 심리적 무리수를 직접적으로 낚아챕니다.",
+        weakness: "갑작스러운 다중 희생 전개로 인해 기동성이 일제히 폭발하는 기습 난전 돌입 시 시간 소모가 큽니다.",
+        mGood: "ACOR",
+        mBad: "DIRP",
+        category: "defense"
+      },
+      "ACOP": {
+        title: "가차 없는 포지션 암살자",
+        desc: "한 치의 무리한 도박도 배제한 채 완벽하게 정밀 계산된 수치적 주도권 압박을 가합니다. 상대의 진형을 조금씩 파쇄하는 클래식 전술 전개 장인입니다.",
+        famous: "가리 카스파로프 (Garry Kasparov)",
+        opening: "시실리안 나이도프 (Najdorf)",
+        piece: "압박 가속용 강력한 비숍 페어",
+        strength: "오프닝 주도권 확보 및 정교한 3선 침공 구조 파악을 통해 오차가 전혀 없는 논리적 붕괴를 추진합니다.",
+        weakness: "정석적인 전개가 불가능한 극심한 비대칭 전형 및 트릭 변수 연쇄 직면 시 다소 보수적으로 퇴조합니다.",
+        mGood: "DICS",
+        mBad: "ACOR",
+        category: "attack"
+      },
+      "DICS": {
+        title: "포지셔널 클래식 사령관",
+        desc: "소소한 구조적 이득(Positional Advantage)을 축적하여 종반전 승리를 최선으로 도모합니다. 불필요한 충돌과 위험 노출을 조용히 소거하는 정밀 수비가입니다.",
+        famous: "아나톨리 카르포프 (Anatoly Karpov)",
+        opening: "퀸즈 갬빗 거절 (QGD)",
+        piece: "전초 기지 장악용 견고한 나이트",
+        strength: "상대의 침략 라인을 조용히 소거함과 동시에 미세한 요충지를 차근차근 전유하여 기각적 전력 고사를 완수합니다.",
+        weakness: "상대가 기상천외한 우주선 갬빗 사선 파괴를 걸어올 때, 순간적인 전선 조정 템포를 지체할 수 있습니다.",
+        mGood: "ACOP",
+        mBad: "DIOR",
+        category: "defense"
+      },
+      "AIOR": {
+        title: "직관적 감각의 사냥꾼",
+        desc: "수많은 변수 갈래를 전부 계산하지 않고도 직관적으로 가장 위협적인 진형과 사선을 즉시 개안하는 타고난 아티스트형 공격 전략가입니다.",
+        famous: "바비 피셔 (Bobby Fischer)",
+        opening: "킹스 인디언 디펜스",
+        piece: "전진 배치 돌격 마이너 기물",
+        strength: "상상력이 번뜩이는 기물 위치 점령을 감행하여 적장의 사고 영역 밖에서 압도적인 심리적 전술을 휘두릅니다.",
+        weakness: "대칭형 구조로 완전히 평행화되어 복잡도가 제거된 단순 앤드게임 계산에서 미세 조율 실수가 있을 수 있습니다.",
+        mGood: "DCCP",
+        mBad: "AICP",
+        category: "attack"
+      },
+      "DCCP": {
+        title: "기하학적 대칭 방어 마스터",
+        desc: "어떠한 기형적인 수순 공격도 완벽한 기하학적 기물 대칭 배치를 통해 조용히 평준화시킵니다. 위험 부담률 자체를 무위로 돌리는 수렴형 수비 설계사입니다.",
+        famous: "블라디미르 크람닉 (Vladimir Kramnik)",
+        opening: "베를린 디펜스 (Berlin Wall)",
+        piece: "사선 차단 및 교환 유도 비숍",
+        strength: "상대의 공격 파고를 무승부 구도로 수렴시키거나, 균형을 맞추려 애쓰는 상대의 조급증을 완벽하게 저격합니다.",
+        weakness: "지나치게 평등한 대칭 구조만을 고집하다 보니 결정적인 공격 찬스에서 과감히 지를 수 있는 승부수를 양보합니다.",
+        mGood: "AIOR",
+        mBad: "DCOR",
+        category: "defense"
+      },
+      "DCOR": {
+        title: "계산 최적화 설계사",
+        desc: "정교한 수읽기 그물을 넓게 전개하여 상대방의 교환 오류를 실시간으로 통제합니다. 변형 전초 사선을 파악하는 앤드게임의 기계 설계자입니다.",
+        famous: "바실리 스미슬로프 (Vasily Smyslov)",
+        opening: "잉글리시 오프닝",
+        piece: "장거리 사선 제어 룩",
+        strength: "기물 교환 과정의 세밀한 폰 승급 우선권 계산에 절대적인 완결성을 자랑해 오류 수렴도가 극히 낮습니다.",
+        weakness: "모든 라인이 촘촘하게 얽힌 중반 진형에서 연산 한계점을 느끼고 정체 현상을 간헐적으로 노출합니다.",
+        mGood: "DICR",
+        mBad: "DCCP",
+        category: "calculation"
+      },
+      "AIOP": {
+        title: "공간 창출 마법사",
+        desc: "중앙 점령에 대한 감각적인 빠른 기물 전개(Tempo)를 바탕으로, 고전적이고 우아한 개방 체스를 예술적으로 완성하는 템포 장인입니다.",
+        famous: "폴 모피 (Paul Morphy)",
+        opening: "이탈리안 게임",
+        piece: "종종 희생되는 고속 침투 나이트",
+        strength: "기본 배치의 한계를 깨는 속도전을 감행해 오프닝 주도권을 즉각 전장에서 무기로 활용합니다.",
+        weakness: "폰이 길게 늘어서 중앙이 닫힌 완고한 전형 지연 전장에서 쉽게 따분해하며 과도한 도박수를 둘 때가 있습니다.",
+        mGood: "DCCR",
+        mBad: "AICR",
+        category: "intuition"
+      },
+      "ACIP": { title: "전술 침공 주의자", desc: "공격적이면서도 직관보다는 확실한 전술 계산을 우위에 두어 대칭 전장에서 상대를 파괴합니다.", famous: "알렉산더 알레힌", opening: "알레힌 디펜스", piece: "침투용 퀸 (Queen)", strength: "빈틈없는 계산 아래 거대한 폭발력을 전개합니다.", weakness: "진형이 경직되어 공격 수순이 제한될 때 조급해지기 쉽습니다.", mGood: "DICS", mBad: "ACOP", category: "attack" },
+      "ACIR": { title: "기묘한 희생 모험가", desc: "예측을 완전히 비껴가는 모험적인 전술 희생과 정밀 난전 계산을 즐기는 혼돈의 공격 지휘관입니다.", famous: "리샤르 라포르트", opening: "기발한 갬빗 라인", piece: "사선 기습 나이트", strength: "상대의 수읽기 경로를 완전히 흩뜨려 붕괴시킵니다.", weakness: "대범한 희생에 걸맞은 보상이 안 나올 경우 전력 부족으로 침몰합니다.", mGood: "DICP", mBad: "ACIP", category: "attack" },
+      "ACCP": { title: "완벽주의 전술 기계", desc: "단 1픽셀의 빈틈도 불허하는 정확한 계산과 안전성 수치를 바탕으로 확실하게 암살 수순을 연산하는 스타일입니다.", famous: "바비 피셔 (청년기)", opening: "루이 로페즈", piece: "공격 라인 룩", strength: "체스 엔진을 방불케 하는 극단적 일관성과 오차율 0% 전술.", weakness: "비정형적 기물 대칭과 교착 전장에 직면하면 연산 과부하에 빠질 수 있습니다.", mGood: "DIOR", mBad: "ACOR", category: "calculation" },
+      "ACCR": { title: "스릴 넘치는 모험가", desc: "정밀 수읽기 계산력을 갖추었으면서도, 더 화려하고 위기감 넘치는 복잡한 사선 전술 도박을 기꺼이 추진합니다.", famous: "안도르 릴리엔탈", opening: "에반스 갬빗", piece: "기습 폰 전초 세력", strength: "불가능해 보이는 희생 라인 속에서도 승리 경로를 계산해 냅니다.", weakness: "간결한 방어 한 수로 역전당할 리스크를 다소 간과합니다.", mGood: "DCCP", mBad: "ACCP", category: "calculation" },
+      "AICR": { title: "직관적 전술 트릭스터", desc: "판의 상태를 순간적으로 읽는 감각과 기발한 함정 수식을 교묘히 결합해 상대의 실수를 낚아 올립니다.", famous: "다니엘 두보프", opening: "모던 카탈란", piece: "측면 비숍 라인", strength: "한순간에 전술 구도를 완전히 바꿀 정도의 날카로운 침투 능력이 있습니다.", weakness: "신중한 방어 수단을 등한시해 의외의 빈틈을 자주 드러냅니다.", mGood: "DCCR", mBad: "AICR", category: "intuition" },
+      "AICP": { title: "견고한 포지션 사냥꾼", desc: "직관을 무기로 중앙 공간 우위를 서서히 개척해 내면서도, 쓸데없는 위험은 안전하게 사전에 가려냅니다.", famous: "딩리런 (Ding Liren)", opening: "카탈란 오프닝", piece: "견고한 중앙 마이너 기물", strength: "단단하고 세련된 형세 판단과 안정적인 기물 배치를 지향합니다.", weakness: "순간적으로 전술 폭풍이 불어 닥칠 때 계산적 정밀함이 살짝 저하될 수 있습니다.", mGood: "DCCR", mBad: "AICR", category: "intuition" },
+      "DICR": { title: "방어 역습의 달인", desc: "닫힌 단단한 배치 수비를 유지하다 상대가 전선을 침공할 때, 틈을 찔러 카운터를 완수하는 역습형입니다.", famous: "레본 아로니안", opening: "슬라브 디펜스", piece: "역습 가속용 룩", strength: "철벽 수비에서 순식간에 공격 전형으로 탈바꿈하는 반사 신경이 좋습니다.", weakness: "초반 방어 위주 전개 탓에 국면 주도권을 지나치게 내어줄 때가 있습니다.", mGood: "ACOR", mBad: "DICS", category: "defense" },
+      "DCCR": { title: "정밀 계산 방어 전문가", desc: "안전이 보장된 전장에서 상대의 약점을 한계까지 연산한 후 앤드게임 트릭을 이용해 냉정하게 점수를 낚는 기계형입니다.", famous: "빅토르 코르치노이", opening: "프렌치 디펜스", piece: "패스드 폰", strength: "끝까지 실수 없이 정밀하고 깊은 계산을 통해 역전 및 굳히기를 완수합니다.", weakness: "엄청난 수의 분석 탓에 제한 시간 압박 상황에서 실책을 남발하기 쉽습니다.", mGood: "AIOP", mBad: "DCCP", category: "calculation" }
+    };
+
+    // 검증된 샘플 기보 세트
+    const samples = {
+      aggro: `[Event "Kasparov vs Topalov"]\n[Result "1-0"]\n1. e4 d6 2. d4 Nf6 3. Nc3 g6 4. Be3 Bg7 5. Qd2 c6 6. f3 b5 7. Nge2 Nbd7 8. Bh6 Bxh6 9. Qxh6 Bb7 10. a3 e5 11. O-O-O Qe7 12. Kb1 a6 13. Nc1 O-O-O 14. Nb3 exd4 15. Rxd4 c5 16. Rd1 Nb6 17. g3 Kb8 18. Na5 Ba8 19. Bh3 d5 20. Qf4+ Ka7 21. Rhe1 d4 22. Nd5 Nbxd5 23. exd5 Qd6 24. Rxd4 cxd4 25. Re7+ Kb6 26. Qxd4+ Kxa5 27. b4+ Ka4 28. Qc3 Qxd5 29. Ra7 Bb7 30. Rxb7 Qc4 31. Qxf6 Kxa3 32. Qxa6+ Kxb4 33. c3+ Kxc3 34. Qa1+ Kd2 35. Qb2+ Kd1 36. Bf1 Rd2 37. Rd7 Rxd7 38. Bxc4 bxc4 39. Qxh8 Rd3 40. Qa8 c3 41. Qa4+ Ke1 42. f4 f5 43. Kc1 Rd2 44. Qa7 1-0`,
+      turtle: `[Event "Championship Match"]\n[Result "1-0"]\n1. d4 Nf6 2. c4 e6 3. Nf3 b6 4. g3 Bb7 5. Bg2 Be7 6. O-O O-O 7. b3 d5 8. Bb2 c6 9. Nbd2 Nbd7 10. Rc1 Rc8 11. e3 Qc7 12. Qe2 Qb8 13. Rfd1 Rfd8 14. Ne5 Nxe5 15. dxe5 Nd7 16. f4 Bf8 17. e4 d4 18. Bxd4 Nc5 19. Bxc5 Bxc5+ 20. Kh1 Be7 21. Nf3 c5 22. h4 Qa8 23. Ne1 Rxd1 24. Rxd1 Rd8 25. Rxd1 Rd8 26. Rxd8+ Qxd8 27. Qd3 Qxd3 28. Nxd3  1-0`
+    };
+
+    // 샘플 클릭 주입
+    function loadSample(key) {
+      document.getElementById('pgn-input').value = samples[key];
+      showToast("대국 분석 샘플이 정합 매핑되었습니다! 아래 분석하기를 눌러주세요. ⚡", false);
+    }
+
+    // 토스트 통제용 유틸리티
+    function showToast(msg, isError = true) {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toast-message');
+      toastMsg.innerText = msg;
+      
+      if (isError) {
+        toast.className = "mb-4 p-4 bg-[#FEE3E2] text-[#DF2121] rounded-2xl text-xs font-semibold flex items-center gap-2 fade-in border border-[#FDE8E8]";
+      } else {
+        toast.className = "mb-4 p-4 bg-[#EAF5E8] text-[#558B49] rounded-2xl text-xs font-semibold flex items-center gap-2 fade-in border border-[#DCEFD9]";
+      }
+      toast.classList.remove('hidden');
+      setTimeout(() => {
+        toast.classList.add('hidden');
+      }, 4000);
+    }
+
+    // 로고 에러 시 Fallback 출력 보장
+    function handleLogoError() {
+      document.getElementById('logo-img').classList.add('hidden');
+      document.getElementById('logo-fallback').classList.remove('hidden');
+    }
+
+    // 실제 기보 정밀 해독 및 진단 연산 알고리즘
+    function analyzePGNReal(pgnText) {
+      let attackScore = 50;  // vs Defense (A/D)
+      let calcScore = 50;    // vs Intuition (C/I)
+      let openScore = 50;    // vs Closed (O/C)
+      let riskScore = 50;    // vs Prudent (R/P)
+
+      // 주석 및 대괄호 메타 데이터 전면 필터링
+      const cleanPgn = pgnText.replace(/\[.*?\]/g, "").trim(); 
+      const moves = cleanPgn.split(/\d+\./).map(v => v.trim()).filter(v => v);
+
+      if (moves.length === 0) {
+        return { A: 50, C: 50, O: 50, R: 50, tags: ["#기본_대칭", "#데이터_공백"], phase: { op: 50, mid: 50, end: 50 } };
+      }
+
+      let checkCount = 0;      
+      let captureCount = 0;    
+      let castleKingside = 0;  
+      let castleQueenside = 0; 
+      let pawnCenterCount = 0; 
+      let closedPawnCount = 0; 
+      let totalMovesCount = 0;
+
+      moves.forEach(m => {
+        const parts = m.split(/\s+/);
+        parts.forEach(moveStr => {
+          if (!moveStr) return;
+          totalMovesCount++;
+
+          if (moveStr.includes('+') || moveStr.includes('#')) checkCount++;
+          if (moveStr.includes('x')) captureCount++;
+          if (moveStr.includes('O-O-O')) castleQueenside++;
+          else if (moveStr.includes('O-O')) castleKingside++;
+
+          if (/^[a-h][1-8]/.test(moveStr)) {
+            if (/^(e4|d4|f4)/.test(moveStr)) pawnCenterCount++;
+            if (/^(c6|e6|d5)/.test(moveStr)) closedPawnCount++;
+          }
+        });
+      });
+
+      // 1. 공격성(A) vs 수비성(D) 비율 도출
+      const attackPower = (checkCount * 9) + (castleQueenside * 20) + (pawnCenterCount * 6) + (captureCount * 3.5);
+      const defensePower = (castleKingside * 15) + (closedPawnCount * 12) + (totalMovesCount * 0.4);
+      const adRatio = (attackPower / (attackPower + defensePower || 1)) * 100;
+      attackScore = Math.max(15, Math.min(85, Math.floor(adRatio)));
+
+      // 2. 수읽기(C) vs 형태 직관(I) 지수 도출
+      const complexity = ((checkCount + captureCount) / (totalMovesCount || 1)) * 100;
+      calcScore = Math.max(15, Math.min(85, Math.floor(35 + complexity * 1.5)));
+
+      // 3. 개방(O) vs 폐쇄(C) 구조적 점수 도출
+      const openIndication = ((captureCount + pawnCenterCount) / (closedPawnCount + 1)) * 15;
+      openScore = Math.max(15, Math.min(85, Math.floor(30 + openIndication)));
+
+      // 4. 위험 감수(R) vs 신중성(P) 도박 경향 점수 도출
+      const riskIndication = (castleQueenside * 25) + (checkCount * 8) - (castleKingside * 5);
+      riskScore = Math.max(15, Math.min(85, Math.floor(48 + riskIndication)));
+
+      // 분석 패턴 키워드 추출
+      const tags = [];
+      if (castleKingside > 0) tags.push("#캐슬링_완비");
+      if (castleQueenside > 0) tags.push("#비대칭_스레트");
+      if (captureCount > (totalMovesCount * 0.22)) tags.push("#강한_난전파");
+      else tags.push("#포지셔널_안정성");
+      if (pawnCenterCount > closedPawnCount) tags.push("#중앙_개척자");
+      else tags.push("#견고한_폰체인");
+
+      // 국면별 매칭 데이터 정량화
+      const opPercent = Math.max(60, Math.min(98, Math.floor(40 + (pawnCenterCount * 14) + (castleKingside * 18))));
+      const midPercent = Math.max(45, Math.min(95, Math.floor(35 + (captureCount * 9) + (checkCount * 7))));
+      const endPercent = Math.max(50, Math.min(95, Math.floor(95 - (totalMovesCount * 0.35))));
+
+      return {
+        A: attackScore,
+        C: calcScore,
+        O: openScore,
+        R: riskScore,
+        tags: tags,
+        phase: {
+          op: opPercent,
+          mid: midPercent,
+          end: endPercent
+        }
+      };
+    }
+
+    // 프로그레스 바 로딩 시뮬레이터 구동
+    function startAnalysis() {
+      const pgn = document.getElementById('pgn-input').value.trim();
+      if (!pgn) {
+        showToast("대국을 복기 진단하려면 체스 기보(PGN)를 먼저 필히 입력하셔야 합니다!");
+        return;
+      }
+
+      document.getElementById('main-view').classList.add('hidden');
+      document.getElementById('loading-view').classList.remove('hidden');
+
+      const simSteps = [
+        { text: "PGN 파서 기물 라우트 추적 검사 중...", time: 400, pct: 25 },
+        { text: "킹사이드 전계 위협 및 전술 밀도 패턴 대조 중...", time: 900, pct: 55 },
+        { text: "국면별 형세 전개 정합성 분석 및 가중치 조율 중...", time: 1500, pct: 85 },
+        { text: "기보 분석 지표 매핑 최적화 완료!", time: 2000, pct: 100 }
+      ];
+
+      simSteps.forEach((step) => {
+        setTimeout(() => {
+          document.getElementById('loading-title').innerText = step.text;
+          document.getElementById('loading-progress').style.width = `${step.pct}%`;
+          
+          if (step.pct === 100) {
+            setTimeout(() => {
+              showAnalysisResult(pgn);
+            }, 450);
+          }
+        }, step.time);
+      });
+    }
+
+    // 최종 진단 대시보드 렌더링
+    function showAnalysisResult(pgnText) {
+      document.getElementById('loading-view').classList.add('hidden');
+      document.getElementById('result-view').classList.remove('hidden');
+
+      const analysis = analyzePGNReal(pgnText);
+
+      // 성향 코드 조합 매핑
+      const char1 = analysis.A >= 50 ? 'A' : 'D';
+      const char2 = analysis.C >= 50 ? 'C' : 'I';
+      const char3 = analysis.O >= 50 ? 'O' : 'C';
+      const char4 = analysis.R >= 50 ? 'R' : 'P';
+      const mbtiKey = `${char1}${char2}${char3}${char4}`;
+
+      const profile = mbtiProfiles[mbtiKey] || mbtiProfiles["ACOR"];
+
+      // 정보 주입
+      document.getElementById('result-code').innerText = mbtiKey;
+      document.getElementById('result-title').innerText = profile.title;
+      document.getElementById('result-desc').innerText = profile.desc;
+      document.getElementById('result-famous').innerText = profile.famous;
+      document.getElementById('result-opening').innerText = profile.opening;
+      document.getElementById('strength-text').innerText = profile.strength;
+      document.getElementById('weakness-text').innerText = profile.weakness;
+
+      // 페이즈 렌더링
+      document.getElementById('phase-opening').innerText = `${analysis.phase.op}% 완비`;
+      document.getElementById('phase-opening-bar').style.width = `${analysis.phase.op}%`;
+
+      document.getElementById('phase-middle').innerText = `${analysis.phase.mid}% 강도`;
+      document.getElementById('phase-middle-bar').style.width = `${analysis.phase.mid}%`;
+
+      document.getElementById('phase-end').innerText = `${analysis.phase.end}% 정밀`;
+      document.getElementById('phase-end-bar').style.width = `${analysis.phase.end}%`;
+
+      // 태그 칩스 갱신
+      const tagContainer = document.getElementById('detection-tags');
+      tagContainer.innerHTML = '';
+      analysis.tags.forEach(t => {
+        const span = document.createElement('span');
+        span.className = "bg-[#F2F4F6] text-[#4E5968] text-[9px] font-bold px-2.5 py-1 rounded-md";
+        span.innerText = t;
+        tagContainer.appendChild(span);
+      });
+
+      // 바 그래프 조정
+      updateResultBar('axis1', analysis.A, 'A (공격성향)', 'D (방어요새)');
+      updateResultBar('axis2', analysis.C, 'C (정밀수읽기)', 'I (공간직관)');
+      updateResultBar('axis3', analysis.O, 'O (중앙개방)', 'C (배치폐쇄)');
+      updateResultBar('axis4', analysis.R, 'R (변수창출)', 'P (안전제일)');
+    }
+
+    // 결과 정밀 계측 바 갱신 처리
+    function updateResultBar(elId, val, leftTxt, rightTxt) {
+      const leftP = val;
+      const rightP = 100 - val;
+      document.getElementById(`${elId}-left-label`).innerText = `${leftTxt}: ${leftP}%`;
+      document.getElementById(`${elId}-right-label`).innerText = `${rightTxt}: ${rightP}%`;
+      document.getElementById(`${elId}-bar`).style.width = `${leftP}%`;
+    }
+
+    // 분석 리셋
+    function resetAnalysis() {
+      document.getElementById('result-view').classList.add('hidden');
+      document.getElementById('main-view').classList.remove('hidden');
+      document.getElementById('pgn-input').value = '';
+    }
+
+    // 레포트 공유 주소 복사
+    function copyShareLink() {
+      const dummy = document.createElement("input");
+      document.body.appendChild(dummy);
+      const code = document.getElementById('result-code').innerText;
+      dummy.value = window.location.href.split('?')[0] + "?mbti=" + code;
+      dummy.select();
+      document.execCommand('copy');
+      document.body.removeChild(dummy);
+      showToast("정밀 진단 레포트 링크 주소가 클립보드에 복사되었습니다! 🔗", false);
+    }
+  </script>
+
+  <script>
+    // 네비게이션 탭 스위칭 제어
+    function switchTab(tabId) {
+      const mainView = document.getElementById('tab-main-view');
+      const encyView = document.getElementById('tab-encyclopedia-view');
+      const histView = document.getElementById('tab-history-view');
+
+      const mTabMain = document.getElementById('m-tab-main');
+      const mTabEncy = document.getElementById('m-tab-ency');
+      const mTabHistory = document.getElementById('m-tab-history');
+
+      // 전면 리셋
+      mainView.classList.add('hidden');
+      encyView.classList.add('hidden');
+      histView.classList.add('hidden');
+
+      if (mTabMain) mTabMain.className = "flex-1 py-3.5 text-sm font-bold text-[#4E5968] border-b-2 border-transparent";
+      if (mTabEncy) mTabEncy.className = "flex-1 py-3.5 text-sm font-bold text-[#4E5968] border-b-2 border-transparent";
+      if (mTabHistory) mTabHistory.className = "flex-1 py-3.5 text-sm font-bold text-[#4E5968] border-b-2 border-transparent";
+
+      if (tabId === 'main') {
+        mainView.classList.remove('hidden');
+        if (mTabMain) mTabMain.className = "flex-1 py-3.5 text-sm font-bold border-b-2 border-[#558B49] text-[#558B49]";
+      } else if (tabId === 'encyclopedia') {
+        encyView.classList.remove('hidden');
+        if (mTabEncy) mTabEncy.className = "flex-1 py-3.5 text-sm font-bold border-b-2 border-[#558B49] text-[#558B49]";
+        renderEncyclopedia();
+      } else if (tabId === 'history') {
+        histView.classList.remove('hidden');
+        if (mTabHistory) mTabHistory.className = "flex-1 py-3.5 text-sm font-bold border-b-2 border-[#558B49] text-[#558B49]";
+      }
+    }
+
+    // 도감 그리드 렌더링
+    function renderEncyclopedia(filterType = 'all') {
+      const grid = document.getElementById('encyclopedia-grid');
+      grid.innerHTML = '';
+
+      Object.entries(mbtiProfiles).forEach(([code, p]) => {
+        if (filterType === 'attack' && p.category !== 'attack') return;
+        if (filterType === 'defense' && p.category !== 'defense') return;
+        if (filterType === 'calculation' && !code.includes('C')) return;
+        if (filterType === 'intuition' && !code.includes('I')) return;
+
+        const card = document.createElement('div');
+        card.className = "bg-white p-5 rounded-2xl border border-[#E5E8EB] hover:shadow-md hover:border-[#558B49]/40 transition duration-300 cursor-pointer flex flex-col justify-between shadow-sm";
+        card.setAttribute('onclick', `openDetailModal('${code}')`);
+
+        const colorBg = p.category === 'attack' ? 'bg-[#FFF0F0] text-red-500' : 'bg-[#EAF5E8] text-[#558B49]';
+
+        card.innerHTML = `
+          <div>
+            <div class="flex items-center justify-between mb-3 text-[10px]">
+              <span class="font-black uppercase bg-slate-100 px-2.5 py-1 rounded-full text-slate-500">${p.category === 'attack' ? '공격형' : '방어형'}</span>
+              <span class="font-bold text-[#558B49]">${p.opening.split(' ')[0]}</span>
+            </div>
+            <div class="w-10 h-10 ${colorBg} rounded-xl flex items-center justify-center mb-3 font-black text-xs tracking-widest">
+              ${code}
+            </div>
+            <h4 class="font-bold text-sm text-[#191F28] mb-1">${p.title}</h4>
+            <p class="text-[11px] text-[#6B7684] line-clamp-3 leading-relaxed mb-3">${p.desc}</p>
+          </div>
+          <div class="border-t border-[#F2F4F6] pt-3 flex items-center justify-between text-[10px] text-[#8B95A1]">
+            <span>대표 마스터: <b>${p.famous.split(' ')[0]}</b></span>
+            <span class="text-[#558B49] font-bold">상세 카드 <i data-lucide="arrow-right" class="inline w-3 h-3"></i></span>
+          </div>
+        `;
+
+        grid.appendChild(card);
+      });
+      lucide.createIcons();
+    }
+
+    // 도감 필터 컨트롤
+    function filterProfiles(type) {
+      const btns = document.querySelectorAll('.ency-filter-btn');
+      btns.forEach(b => {
+        b.className = "ency-filter-btn px-4 py-1.5 rounded-full text-xs font-bold bg-white text-[#4E5968] hover:bg-[#E5E8EB] transition border border-[#E5E8EB]";
+      });
+      event.target.className = "ency-filter-btn px-4 py-1.5 rounded-full text-xs font-bold bg-[#558B49] text-white transition";
+      renderEncyclopedia(type);
+    }
+
+    // 프로필 모달 통제
+    function openProfileModal() {
+      document.getElementById('profile-modal').classList.remove('hidden');
+      document.getElementById('profile-modal').classList.add('flex');
+    }
+    function closeProfileModal() {
+      document.getElementById('profile-modal').classList.add('hidden');
+      document.getElementById('profile-modal').classList.remove('flex');
+    }
+
+    // 로그인 모달 통제
+    function openLoginModal() {
+      document.getElementById('login-modal').classList.remove('hidden');
+      document.getElementById('login-modal').classList.add('flex');
+    }
+    function closeLoginModal() {
+      document.getElementById('login-modal').classList.add('hidden');
+      document.getElementById('login-modal').classList.remove('flex');
+    }
+
+    // 상세 정보 모달 통제
+    function openDetailModal(mbtiCode) {
+      const p = mbtiProfiles[mbtiCode];
+      if (!p) return;
+
+      document.getElementById('detail-badge').innerText = mbtiCode;
+      document.getElementById('detail-title').innerText = p.title;
+      document.getElementById('detail-sub').innerText = `대표 전설 마스터: ${p.famous}`;
+      document.getElementById('detail-desc').innerText = p.desc;
+      document.getElementById('detail-strength').innerText = p.strength;
+      document.getElementById('detail-weakness').innerText = p.weakness;
+      document.getElementById('detail-opening').innerText = p.opening;
+      document.getElementById('detail-piece').innerText = p.piece;
+      document.getElementById('detail-match-good').innerText = p.mGood;
+      document.getElementById('detail-match-bad').innerText = p.mBad;
+
+      document.getElementById('detail-modal').classList.remove('hidden');
+      document.getElementById('detail-modal').classList.add('flex');
+    }
+
+    function closeDetailModal() {
+      document.getElementById('detail-modal').classList.add('hidden');
+      document.getElementById('detail-modal').classList.remove('flex');
+    }
+
+    // 시작 지점에서의 주소 파라미터 확인 및 로드
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      const urlParams = new URLSearchParams(window.location.search);
+      const sharedMbti = urlParams.get('mbti');
+      if (sharedMbti && mbtiProfiles[sharedMbti]) {
+        openDetailModal(sharedMbti);
+      }
+    });
+  </script>
+</body>
+</html>
